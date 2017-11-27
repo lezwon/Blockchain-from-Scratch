@@ -14,7 +14,7 @@ mod blockchain {
 	struct Transaction{
 		sender: String,
         recipient: String,
-        amount: u32,
+        amount: f32,
 	}
 
 	#[derive(Serialize)]
@@ -37,6 +37,7 @@ mod blockchain {
 		chain: Vec<Block>,
 		current_transactions : Vec<Transaction>,
 		difficulty: u32,
+		miner_address: String,
 		_secret: ()
 	}
 
@@ -46,14 +47,27 @@ mod blockchain {
 				chain: Vec::new(),
 				current_transactions : Vec::new(),
 				difficulty: 1,
+				miner_address : String::from("3EhLZarJUNSfV6TWMZY1Nh5mi3FMsdHa5U"),
 				_secret: ()
 			};
 
-			chain.generate_new_block();
+			chain.add_reward();
 			chain
 		}
 
-		pub fn new_transaction(&mut self, sender: String, recipient: String, amount: u32) {
+		pub fn add_reward(&mut self) {
+			self.current_transactions = vec![];
+
+			let transaction = Transaction {
+				sender: String::new(),
+		        recipient: self.miner_address.clone(),
+		        amount: 12.5
+			};
+
+			self.current_transactions.push(transaction);
+		}
+
+		pub fn new_transaction(&mut self, sender: String, recipient: String, amount: f32) {
 			self.current_transactions.push(Transaction {
 				sender: sender,
 		        recipient: recipient,
@@ -98,7 +112,7 @@ mod blockchain {
 				transactions: self.current_transactions.clone()
         	};
 
-	        self.current_transactions = vec![];
+	        self.add_reward();
 	        self.chain.push(block);
 	        &(self.chain.last().unwrap())
 		}

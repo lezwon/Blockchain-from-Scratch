@@ -38,7 +38,8 @@ mod blockchain {
 
 	pub struct Chain {
 		chain: Vec<Block>,
-		current_transactions : Vec<Transaction> ,
+		current_transactions : Vec<Transaction>,
+		difficulty: u32,
 		_secret: ()
 	}
 
@@ -47,6 +48,7 @@ mod blockchain {
 			let mut chain = Chain{ 
 				chain: Vec::new(),
 				current_transactions : Vec::new(),
+				difficulty: 1,
 				_secret: ()
 			};
 
@@ -73,19 +75,25 @@ mod blockchain {
 			Chain::hash(&block.block_header)
 		}
 
+		pub fn update_difficulty(&mut self, difficulty: u32) -> bool {
+			self.difficulty = difficulty;
+			true
+		}
+
 		pub fn generate_new_block(&mut self) -> &Block {
 			let mut block_header = BlockHeader{
 				timestamp: time::now().to_timespec().sec,
 				nonce: 0,
 				previous_hash: self.last_hash(),
 				merkle_root: vec![],
-				difficulty: 1
+				difficulty: self.difficulty
 			};
 
 			//merkle root hash
 			block_header.merkle_root = Chain::get_merkle_root(self.current_transactions.clone());
 
 			// add proof of work
+			
 
 			let block = Block{
 	            block_header: block_header,

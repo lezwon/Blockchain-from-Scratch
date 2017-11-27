@@ -1,6 +1,3 @@
-// extern crate time;
-// use std::ptr::null;
-// use std::time::SystemTime;
 #[macro_use]
 extern crate serde_derive;
 
@@ -24,8 +21,8 @@ mod blockchain {
 	pub struct BlockHeader{
 	    timestamp: i64,
 	    nonce: u32,
-	    previous_hash: Vec<u8>,
-	    merkle_root: Vec<u8>,
+	    previous_hash: String,
+	    merkle_root: String,
 	    difficulty: u32
 	}
 
@@ -66,10 +63,10 @@ mod blockchain {
 			// self.chain.last().index + 1
 		}
 
-		pub fn last_hash(&self) -> Vec<u8> {
+		pub fn last_hash(&self) -> String {
 			let block = match self.chain.last() {
 				Some(block) => block,
-				None => return vec![0]
+				None => panic!("No Block Found")
 			};
 
 			Chain::hash(&block.block_header)
@@ -85,7 +82,7 @@ mod blockchain {
 				timestamp: time::now().to_timespec().sec,
 				nonce: 0,
 				previous_hash: self.last_hash(),
-				merkle_root: vec![],
+				merkle_root: String::new(),
 				difficulty: self.difficulty
 			};
 
@@ -93,7 +90,7 @@ mod blockchain {
 			block_header.merkle_root = Chain::get_merkle_root(self.current_transactions.clone());
 
 			// add proof of work
-			
+			Chain::proof_of_work(&mut block_header);
 
 			let block = Block{
 	            block_header: block_header,
@@ -106,7 +103,7 @@ mod blockchain {
 	        &(self.chain.last().unwrap())
 		}
 
-		fn get_merkle_root(current_transactions: Vec<Transaction>) -> Vec<u8> {
+		fn get_merkle_root(current_transactions: Vec<Transaction>) -> String {
 			let mut merkle = Vec::new();
 
 			for transaction in &current_transactions {
@@ -122,7 +119,7 @@ mod blockchain {
 			while merkle.len() > 1 {
 				let mut hash1 = merkle.pop().unwrap();
 				let mut hash2 = merkle.pop().unwrap();
-				hash1.append(&mut hash2);
+				hash1.push_str(&mut hash2);
 				let new_hash = Chain::hash(&hash1);
 				merkle.push(new_hash);
 			}
@@ -130,14 +127,29 @@ mod blockchain {
 			merkle.pop().unwrap()
 		}
 
-		pub fn hash<T: serde::Serialize>(item: &T) -> Vec<u8> {
+		pub fn proof_of_work(block_header: &mut BlockHeader) {
+			//pow based on difficulty
+			loop {
+				let hash = Chain::hash(block_header);
+				let slice = &hash[..block_header.difficulty as usize];
+				let res: i32 = slice.parse().unwrap();
+				if res != 0 { block_header.nonce+=1; } else { break; }
+			}
+
+		}
+
+		pub fn hash<T: serde::Serialize>(item: &T) -> String {
 			//serialize
 			let input = serde_json::to_string(&item).unwrap();
 			let mut hasher = Sha256::default();
 			hasher.input(input.as_bytes());
 			// hasher.result()
 			// println!("Result: {:x}", hasher.result());
-			hasher.result().to_vec()
+			let vec_result = hasher.result().to_vec();
+			match String::from_utf8(vec_result) {
+				Ok(str) => str,
+				Err(_) => panic!("Could not convert Vec hash to String")
+			}
 		}
 	}
 }

@@ -9,6 +9,7 @@ mod blockchain {
 	extern crate sha2;
 
 	use self::sha2::{Sha256, Digest};
+	use std::fmt::Write;
 
 	#[derive(Debug, Clone, Serialize)]
 	struct Transaction{
@@ -17,7 +18,7 @@ mod blockchain {
         amount: f32,
 	}
 
-	#[derive(Serialize)]
+	#[derive(Serialize, Debug)]
 	pub struct BlockHeader{
 	    timestamp: i64,
 	    nonce: u32,
@@ -26,7 +27,7 @@ mod blockchain {
 	    difficulty: u32
 	}
 
-	#[derive(Serialize)]
+	#[derive(Serialize, Debug)]
 	pub struct Block{
 		block_header: BlockHeader,
 		transaction_count: u32,
@@ -46,12 +47,13 @@ mod blockchain {
 			let mut chain = Chain{ 
 				chain: Vec::new(),
 				current_transactions : Vec::new(),
-				difficulty: 1,
+				difficulty: 2,
 				miner_address : String::from("3EhLZarJUNSfV6TWMZY1Nh5mi3FMsdHa5U"),
 				_secret: ()
 			};
 
 			chain.add_reward();
+			chain.generate_new_block();
 			chain
 		}
 
@@ -80,7 +82,7 @@ mod blockchain {
 		pub fn last_hash(&self) -> String {
 			let block = match self.chain.last() {
 				Some(block) => block,
-				None => panic!("No Block Found")
+				None => return String::from_utf8(vec![48; 32]).unwrap()
 			};
 
 			Chain::hash(&block.block_header)
@@ -113,6 +115,7 @@ mod blockchain {
         	};
 
 	        self.add_reward();
+	        println!("{:?}", &block);
 	        self.chain.push(block);
 	        &(self.chain.last().unwrap())
 		}
@@ -146,8 +149,17 @@ mod blockchain {
 			loop {
 				let hash = Chain::hash(block_header);
 				let slice = &hash[..block_header.difficulty as usize];
-				let res: i32 = slice.parse().unwrap();
-				if res != 0 { block_header.nonce+=1; } else { break; }
+				println!("{}", slice);
+				match slice.parse::<u32>() {
+					Ok(val) => {
+						if val != 0 { block_header.nonce+=1; } else { break; }
+					},
+					Err(_) => {
+						block_header.nonce+=1;
+						continue;
+					}
+				};
+				
 			}
 
 		}
@@ -159,11 +171,18 @@ mod blockchain {
 			hasher.input(input.as_bytes());
 			// hasher.result()
 			// println!("Result: {:x}", hasher.result());
-			let vec_result = hasher.result().to_vec();
-			match String::from_utf8(vec_result) {
-				Ok(str) => str,
-				Err(_) => panic!("Could not convert Vec hash to String")
-			}
+			let result = hasher.result();
+			let vec_result = result.to_vec();
+
+			Chain::hex_to_string(vec_result.as_slice())
+		}
+
+		pub fn hex_to_string(vec_result: &[u8]) -> String {
+			let mut s = String::new();
+		    for byte in vec_result {
+		        write!(&mut s, "{:x}", byte).expect("Unable to write");
+		    }
+		    s
 		}
 	}
 }

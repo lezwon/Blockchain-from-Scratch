@@ -4,12 +4,12 @@
 #[macro_use]
 extern crate serde_derive;
 
+
 mod blockchain {
 	extern crate time;
 	extern crate serde;
 	extern crate serde_json;
 	extern crate sha2;
-
 
 	use self::sha2::{Sha256, Digest};
 
@@ -21,12 +21,19 @@ mod blockchain {
 	}
 
 	#[derive(Serialize)]
-	pub struct Block{
-	    index: u32,
+	pub struct BlockHeader{
 	    timestamp: i64,
-	    transactions: Vec<Transaction>,
-	    proof: u32,
-	    previous_hash: u32
+	    nonce: u32,
+	    previous_hash: Vec<u8>,
+	    merkle_root: Vec<u8>,
+	    difficulty: u32
+	}
+
+	#[derive(Serialize)]
+	pub struct Block{
+		block_header: BlockHeader,
+		transaction_count: u32,
+		transactions: Vec<Transaction>
 	}
 
 	pub struct Chain {
@@ -43,11 +50,11 @@ mod blockchain {
 				_secret: ()
 			};
 
-			chain.new_block(100, 1);
+			chain.generate_new_block();
 			chain
 		}
 
-		pub fn new_transaction(&mut self, sender: String, recipient: String, amount: u32) -> u32 {
+		pub fn new_transaction(&mut self, sender: String, recipient: String, amount: u32) {
 			self.current_transactions.push(Transaction {
 				sender: sender,
 		        recipient: recipient,
@@ -55,19 +62,35 @@ mod blockchain {
 			});
 
 			// self.chain.last().index + 1
-			match self.chain.last() {
-				Some(block) => block.index + 1,
-				None => 0
-			}
 		}
 
-		pub fn new_block(&mut self, proof: u32, previous_hash: u32) -> &Block {
+		pub fn last_hash(&self) -> Vec<u8> {
+			let block = match self.chain.last() {
+				Some(block) => block,
+				None => return vec![0]
+			};
+
+			Chain::hash(&block.block_header)
+		}
+
+		pub fn generate_new_block(&mut self) -> &Block {
+			let mut block_header = BlockHeader{
+				timestamp: time::now().to_timespec().sec,
+				nonce: 0,
+				previous_hash: self.last_hash(),
+				merkle_root: vec![],
+				difficulty: 1
+			};
+
+			//merkle root hash
+			block_header.merkle_root = Chain::get_merkle_root(self.current_transactions.clone());
+
+			// add proof of work
+
 			let block = Block{
-	            index: self.chain.len().count_ones() + 1,
-	            timestamp: time::now().to_timespec().sec,
-	            transactions: self.current_transactions.clone(),
-	            proof: proof,
-	            previous_hash: previous_hash,
+	            block_header: block_header,
+				transaction_count: self.current_transactions.len().count_ones(),
+				transactions: self.current_transactions.clone()
         	};
 
 	        self.current_transactions = vec![];
@@ -75,19 +98,38 @@ mod blockchain {
 	        &(self.chain.last().unwrap())
 		}
 
-		pub fn test(&self) {
-			self.chain.last().unwrap().hash()
-		}
-	}
+		fn get_merkle_root(current_transactions: Vec<Transaction>) -> Vec<u8> {
+			let mut merkle = Vec::new();
 
-	impl Block{
-		pub fn hash(&self){
+			for transaction in &current_transactions {
+				let transaction_hash = Chain::hash(transaction);
+				merkle.push(transaction_hash);
+			}
+
+			if merkle.len() % 2 == 1 {
+				let last = merkle.last().cloned().unwrap();
+				merkle.push(last);
+			}
+
+			while merkle.len() > 1 {
+				let mut hash1 = merkle.pop().unwrap();
+				let mut hash2 = merkle.pop().unwrap();
+				hash1.append(&mut hash2);
+				let new_hash = Chain::hash(&hash1);
+				merkle.push(new_hash);
+			}
+
+			merkle.pop().unwrap()
+		}
+
+		pub fn hash<T: serde::Serialize>(item: &T) -> Vec<u8> {
 			//serialize
-			let input = serde_json::to_string(&self).unwrap();
+			let input = serde_json::to_string(&item).unwrap();
 			let mut hasher = Sha256::default();
 			hasher.input(input.as_bytes());
 			// hasher.result()
-			println!("Result: {:x}", hasher.result());
+			// println!("Result: {:x}", hasher.result());
+			hasher.result().to_vec()
 		}
 	}
 }
@@ -95,6 +137,4 @@ mod blockchain {
 
 fn main() {
 	let chain = blockchain::Chain::new();
-	chain.test()
-
 }

@@ -134,8 +134,8 @@ mod blockchain {
 			}
 
 			while merkle.len() > 1 {
-				let mut hash1 = merkle.pop().unwrap();
-				let mut hash2 = merkle.pop().unwrap();
+				let mut hash1 = merkle.remove(0);
+				let mut hash2 = merkle.remove(0);
 				hash1.push_str(&mut hash2);
 				let new_hash = Chain::hash(&hash1);
 				merkle.push(new_hash);

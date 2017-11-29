@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate serde_derive;
 
+use std::io;
+use std::process;
+use std::io::Write;
 
 mod blockchain {
 	extern crate time;
@@ -39,50 +42,39 @@ mod blockchain {
 		current_transactions : Vec<Transaction>,
 		difficulty: u32,
 		miner_address: String,
+		reward_amount: f32,
 		_secret: ()
 	}
 
 	impl Chain {
-		pub fn new() -> Chain {
+		pub fn new(miner_address: String, difficulty: u32) -> Chain {
 			let mut chain = Chain{ 
 				chain: Vec::new(),
 				current_transactions : Vec::new(),
-				difficulty: 2,
-				miner_address : String::from("3EhLZarJUNSfV6TWMZY1Nh5mi3FMsdHa5U"),
+				difficulty: difficulty,
+				miner_address : miner_address,
+				reward_amount: 12.5,
 				_secret: ()
 			};
 
-			chain.add_reward();
 			chain.generate_new_block();
 			chain
 		}
 
-		pub fn add_reward(&mut self) {
-			self.current_transactions = vec![];
-
-			let transaction = Transaction {
-				sender: String::new(),
-		        recipient: self.miner_address.clone(),
-		        amount: 12.5
-			};
-
-			self.current_transactions.push(transaction);
-		}
-
-		pub fn new_transaction(&mut self, sender: String, recipient: String, amount: f32) {
+		pub fn new_transaction(&mut self, sender: String, recipient: String, amount: f32) -> bool {
 			self.current_transactions.push(Transaction {
 				sender: sender,
 		        recipient: recipient,
 		        amount: amount,
 			});
 
-			// self.chain.last().index + 1
+			true
 		}
 
 		pub fn last_hash(&self) -> String {
 			let block = match self.chain.last() {
 				Some(block) => block,
-				None => return String::from_utf8(vec![48; 32]).unwrap()
+				None => return String::from_utf8(vec![48; 64]).unwrap()
 			};
 
 			Chain::hash(&block.block_header)
@@ -93,7 +85,12 @@ mod blockchain {
 			true
 		}
 
-		pub fn generate_new_block(&mut self) -> &Block {
+		pub fn update_reward(&mut self, reward_amount: f32) -> bool {
+			self.reward_amount = reward_amount;
+			true
+		}
+
+		pub fn generate_new_block(&mut self) -> bool {
 			let mut block_header = BlockHeader{
 				timestamp: time::now().to_timespec().sec,
 				nonce: 0,
@@ -102,22 +99,32 @@ mod blockchain {
 				difficulty: self.difficulty
 			};
 
-			//merkle root hash
-			block_header.merkle_root = Chain::get_merkle_root(self.current_transactions.clone());
+			let reward_transaction = Transaction {
+				sender: String::new(),
+		        recipient: self.miner_address.clone(),
+		        amount: self.reward_amount
+			};
 
-			// add proof of work
-			Chain::proof_of_work(&mut block_header);
-
-			let block = Block{
+			let mut block = Block{
 	            block_header: block_header,
-				transaction_count: self.current_transactions.len().count_ones(),
-				transactions: self.current_transactions.clone()
+				transaction_count: 0,
+				transactions: vec![]
         	};
 
-	        self.add_reward();
-	        println!("{:?}", &block);
+        	
+        	block.transactions.push(reward_transaction);
+        	block.transactions.append(&mut self.current_transactions);
+        	block.transaction_count = block.transactions.len() as u32;
+
+        	//merkle root hash
+			block.block_header.merkle_root = Chain::get_merkle_root(block.transactions.clone());
+			//proof of work
+			Chain::proof_of_work(&mut block.block_header);
+
+
+	        println!("{:#?}", &block);
 	        self.chain.push(block);
-	        &(self.chain.last().unwrap())
+	        true
 		}
 
 		fn get_merkle_root(current_transactions: Vec<Transaction>) -> String {
@@ -149,17 +156,19 @@ mod blockchain {
 			loop {
 				let hash = Chain::hash(block_header);
 				let slice = &hash[..block_header.difficulty as usize];
-				println!("{}", slice);
 				match slice.parse::<u32>() {
 					Ok(val) => {
-						if val != 0 { block_header.nonce+=1; } else { break; }
+						if val != 0 { block_header.nonce+=1; } 
+						else { 
+							println!("BLOCK HASH: {}", hash);
+							break; 
+						}
 					},
 					Err(_) => {
 						block_header.nonce+=1;
 						continue;
 					}
 				};
-				
 			}
 
 		}
@@ -189,5 +198,103 @@ mod blockchain {
 
 
 fn main() {
-	let chain = blockchain::Chain::new();
+	let mut miner_address = String::new();
+	let mut difficulty_string = String::new();
+	let mut choice = String::new();
+
+	println!("##########################################");
+	println!("\t BLOCKCHAIN FROM SCRATCH ");
+	println!("##########################################");
+
+	print!("MINER ADDRESS: ");
+	io::stdout().flush();
+	io::stdin().read_line(&mut miner_address);
+	print!("DIFFICULTY: ");
+	io::stdout().flush();
+	io::stdin().read_line(&mut difficulty_string);
+	let difficulty: u32 = difficulty_string.trim().parse().unwrap();
+	println!("++++++++++++++++ INITIATING CHAIN ++++++++++++++++++++");
+	println!("::::::::::::: GENERATING GENESIS BLOCK :::::::::::::::");
+	let mut chain = blockchain::Chain::new(miner_address.trim().to_string(), difficulty);
+
+	loop{
+		println!("-----------------------------------------");
+		println!("\t\tMENU ");
+		println!("1. NEW TRANSACTION");
+		println!("2. MINE BLOCK");
+		println!("3. CHANGE DIFFICULTY LEVEL");
+		println!("4. CHANGE REWARD AMOUNT");
+		println!("0. EXIT");
+		print!("ENTER YOUR CHOICE: ");
+		io::stdout().flush();
+		choice.clear();
+		io::stdin().read_line(&mut choice);
+		println!("-----------------------------------------");
+
+		match choice.trim().parse().unwrap() {
+			0 => 
+			{
+				println!("--------------------EXITING----------------------");
+				process::exit(0);
+			},
+			1 => 
+			{
+				let mut sender = String::new();
+				let mut recipient = String::new();
+				let mut amount = String::new();
+
+				print!("ENTER SENDER ADDRESS: ");
+				io::stdout().flush();
+				io::stdin().read_line(&mut sender);
+				print!("ENTER RECEIPIENT ADDRESS: ");
+				io::stdout().flush();
+				io::stdin().read_line(&mut recipient);
+				print!("ENTER AMOUNT: ");
+				io::stdout().flush();
+				io::stdin().read_line(&mut amount);
+				let res = chain.new_transaction(sender.trim().to_string(), recipient.trim().to_string(), amount.trim().parse().unwrap());
+				match res {
+					true => println!("TRANSACTION ADDED SUCCESSFULLY!"),
+					false => println!("TRANSACTION ADDITION FAILED!"),
+				}
+			},
+			2 => 
+			{
+				println!("::::::::::::::::::: GENERATING BLOCK ::::::::::::::::::::::");
+				let res = chain.generate_new_block();
+				match res {
+					true => println!("BLOCK GENERATED SUCCESSFULLY!"),
+					false => println!("BLOCK GENERATION FAILED!"),
+				}
+			}
+			3 => 
+			{
+				let mut new_difficulty = String::new();
+				print!("ENTER NEW DIFFICULTY:");
+				io::stdout().flush();
+				io::stdin().read_line(&mut new_difficulty);
+				let res = chain.update_difficulty(new_difficulty.trim().parse().unwrap());
+				match res {
+					true => println!("UPDATED DIFFICULTY SUCCESSFULLY!"),
+					false => println!("DIFFICULTY UPDATION FAILED!"),
+				}
+			},
+			4 => 
+			{
+				let mut new_reward = String::new();
+				print!("ENTER NEW REWARD AMOUNT:");
+				io::stdout().flush();
+				io::stdin().read_line(&mut new_reward);
+				let res = chain.update_reward(new_reward.trim().parse().unwrap());
+				match res {
+					true => println!("UPDATED REWARD AMOUNT SUCCESSFULLY!"),
+					false => println!("REWARD AMOUNT UPDATION FAILED!"),
+				}
+			},
+			_ => println!("************\t INVALID OPTION. PLEASE RETRY \t************"),
+		}
+
+	}
+
+
 }
